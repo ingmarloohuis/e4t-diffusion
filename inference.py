@@ -3,6 +3,7 @@ import os
 from tqdm import tqdm
 from PIL import Image
 import torch
+import wandb
 from diffusers import (
     LMSDiscreteScheduler,
     DDIMScheduler,
@@ -39,7 +40,6 @@ def parse_args():
     parser.add_argument("--guidance_scale", type=float, default=1.0, help="unconditional guidance scale")
     parser.add_argument("--num_images_per_prompt", type=int, default=1, help="number of images per prompt")
     parser.add_argument("--height", type=int, default=512, help="image height, in pixel space",)
-    parser.add_argument("--output_dir", type=str, default="e4t-model", help="The output directory where the model predictions and checkpoints will be written.", )
     parser.add_argument("--width", type=int, default=512, help="image width, in pixel space",)
     parser.add_argument("--seed", type=int, default=None, help="the seed (for reproducible sampling)")
     parser.add_argument("--scheduler_type", type=str, choices=["ddim", "plms", "lms", "euler", "euler_ancestral", "dpm_solver++"], default="ddim", help="diffusion scheduler type")
@@ -74,6 +74,7 @@ SCHEDULER_MAPPING = {
 
 
 def main():
+    wandb.login(key="c965c815b497a82a51bcce163bdec5a24d0b9488")
     args = parse_args()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"device: {device}")
@@ -136,7 +137,6 @@ def main():
         generator = torch.Generator(device=device).manual_seed(args.seed)
     prompts = args.prompt.split("::")
     all_images = []
-    output_dir = args.output_dir
     for prompt in tqdm(prompts):
         with torch.autocast(device), torch.inference_mode():
             images = pipe(
@@ -150,10 +150,13 @@ def main():
                 width=args.width,
             ).images
         all_images.extend(images)
-        for i, img in enumerate(images):
-            img.save(f"{output_dir}/{prompt}_{i}.png")
     grid_image = image_grid(all_images, len(prompts), args.num_images_per_prompt)
-    grid_image.save(f"{output_dir}/grid.png")
+    images_wandb = wandb.Image(
+    image_array, 
+    caption="Top: Output, Bottom: Input"
+    )
+          
+    wandb.log({"examples": images_wandb}
     print("DONE! See `grid.png` for the results!")
 
 
